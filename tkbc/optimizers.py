@@ -31,9 +31,14 @@ class TKBCOptimizer(object):
             bar.set_description(f'train loss')
             b_begin = 0
             while b_begin < examples.shape[0]:
-                input_batch = actual_examples[
-                    b_begin:b_begin + self.batch_size
-                ].cuda()
+                if torch.cuda.is_available():
+                    input_batch = actual_examples[
+                        b_begin:b_begin + self.batch_size
+                    ].cuda()
+                else:
+                    input_batch = actual_examples[
+                        b_begin:b_begin + self.batch_size
+                    ]
                 predictions, factors, time = self.model.forward(input_batch)
                 truth = input_batch[:, 2]
 
@@ -78,13 +83,22 @@ class IKBCOptimizer(object):
             bar.set_description(f'train loss')
             b_begin = 0
             while b_begin < examples.shape[0]:
-                time_range = actual_examples[b_begin:b_begin + self.batch_size].cuda()
+                if torch.cuda.is_available():
+                    time_range = actual_examples[b_begin:b_begin + self.batch_size].cuda()
+                else:
+                    time_range = actual_examples[b_begin:b_begin + self.batch_size]
 
                 ## RHS Prediction loss
-                sampled_time = (
-                        torch.rand(time_range.shape[0]).cuda() * (time_range[:, 4] - time_range[:, 3]).float() +
-                        time_range[:, 3].float()
-                ).round().long()
+                if torch.cuda.is_available():
+                    sampled_time = (
+                            torch.rand(time_range.shape[0]).cuda() * (time_range[:, 4] - time_range[:, 3]).float() +
+                            time_range[:, 3].float()
+                    ).round().long()
+                else:
+                    sampled_time = (
+                            torch.rand(time_range.shape[0]) * (time_range[:, 4] - time_range[:, 3]).float() +
+                            time_range[:, 3].float()
+                    ).round().long()
                 with_time = torch.cat((time_range[:, 0:3], sampled_time.unsqueeze(1)), 1)
 
                 predictions, factors, time = self.model.forward(with_time)
@@ -100,12 +114,14 @@ class IKBCOptimizer(object):
                         (time_range[:, 4] == (self.dataset.n_timestamps - 1))
                     ) # NOT no begin and no end
                     these_examples = time_range[filtering, :]
+                    if torch.cuda.is_available():
+                        these_examples = these_examples.cuda()
                     truth = (
-                            torch.rand(these_examples.shape[0]).cuda() * (these_examples[:, 4] - these_examples[:, 3]).float() +
+                            torch.rand(these_examples.shape[0]) * (these_examples[:, 4] - these_examples[:, 3]).float() +
                             these_examples[:, 3].float()
                     ).round().long()
-                    time_predictions = self.model.forward_over_time(these_examples[:, :3].cuda().long())
-                    time_loss = loss(time_predictions, truth.cuda())
+                    time_predictions = self.model.forward_over_time(these_examples[:, :3].long())
+                    time_loss = loss(time_predictions, truth)
 
                 l_reg = self.emb_regularizer.forward(factors)
                 l_time = torch.zeros_like(l_reg)

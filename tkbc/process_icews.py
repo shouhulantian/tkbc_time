@@ -87,6 +87,21 @@ def prepare_dataset(path, name):
     pickle.dump(to_skip_final, out)
     out.close()
 
+    # create time filtering files
+    time_to_skip = {'lhs':defaultdict(set)}
+    for f in files:
+        examples = pickle.load(open(Path(DATA_PATH) / name / (f + '.pickle'), 'rb'))
+        for lhs, rel, rhs, ts in examples:
+            time_to_skip['lhs'][(lhs, rel, rhs)].add(ts)
+
+    time_to_skip_final = {}
+    for k, v in time_to_skip['lhs'].items():
+        time_to_skip_final[k] = sorted(list(v))
+
+    out = open(Path(DATA_PATH) / name / 'time_to_skip.pickle', 'wb')
+    pickle.dump(time_to_skip_final, out)
+    out.close()
+
     examples = pickle.load(open(Path(DATA_PATH) / name / 'train.pickle', 'rb'))
     counters = {
         'lhs': np.zeros(n_entities),
@@ -107,7 +122,7 @@ def prepare_dataset(path, name):
 
 
 if __name__ == "__main__":
-    datasets = ['ICEWS14', 'ICEWS05-15']
+    datasets = ['ICEWS14', 'ICEWS05-15','gdelt']
     for d in datasets:
         print("Preparing dataset {}".format(d))
         try:

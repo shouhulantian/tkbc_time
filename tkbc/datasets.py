@@ -35,7 +35,10 @@ class TemporalDataset(object):
             self.n_timestamps = int(maxis[3] + 1)
         try:
             inp_f = open(str(self.root / f'ts_diffs.pickle'), 'rb')
-            self.time_diffs = torch.from_numpy(pickle.load(inp_f)).cuda().float()
+            if torch.cuda.is_available():
+                self.time_diffs = torch.from_numpy(pickle.load(inp_f)).cuda().float()
+            else:
+                self.time_diffs = torch.from_numpy(pickle.load(inp_f)).float()
             # print("Assume all timestamps are regularly spaced")
             # self.time_diffs = None
             inp_f.close()
@@ -60,6 +63,9 @@ class TemporalDataset(object):
             inp_f = open(str(self.root / f'to_skip.pickle'), 'rb')
             self.to_skip: Dict[str, Dict[Tuple[int, int, int], List[int]]] = pickle.load(inp_f)
             inp_f.close()
+            time_f = open(str(self.root / f'time_to_skip.pickle'), 'rb')
+            self.time_to_skip = pickle.load(time_f)
+            time_f.close()
 
 
         # If dataset has events, it's wikidata.
@@ -87,7 +93,10 @@ class TemporalDataset(object):
         if self.events is not None:
             return self.time_eval(model, split, n_queries, 'rhs', at)
         test = self.get_examples(split)
-        examples = torch.from_numpy(test.astype('int64')).cuda()
+        if torch.cuda.is_available():
+            examples = torch.from_numpy(test.astype('int64')).cuda()
+        else:
+            examples = torch.from_numpy(test.astype('int64'))
         missing = [missing_eval]
         if missing_eval == 'both':
             missing = ['rhs', 'lhs']
@@ -114,6 +123,51 @@ class TemporalDataset(object):
 
         return mean_reciprocal_rank, hits_at
 
+#This is the new added code, to evaluate time prediction result
+    def eval_time(
+            self, model: TKBCModel, split: str, n_queries: int = -1, missing_eval: str = 'both',
+            at: Tuple[int] = (1, 3, 10)
+    ):
+        if self.events is not None:
+            pass #time interval dataset, implementation in the future
+        test = self.get_examples(split)
+        if torch.cuda.is_available():
+            examples = torch.from_numpy(test.astype('int64')).cuda()
+        else:
+            examples = torch.from_numpy(test.astype('int64'))
+        # We do not perform rhs for time prediction, only lhs
+        # missing = [missing_eval]
+        # if missing_eval == 'both':
+        #     missing = ['rhs', 'lhs']
+        #missing = ['lhs']
+
+        mean_reciprocal_rank = {}
+        #hits_at = {}
+        mae = {}
+        tmrr = {}
+
+        #for m in missing:
+        q = examples.clone()
+        if n_queries > 0:
+            permutation = torch.randperm(len(examples))[:n_queries]
+            q = examples[permutation]
+        # if m == 'lhs':
+        #     tmp = torch.clone(q[:, 0])
+        #     q[:, 0] = q[:, 2]
+        #     q[:, 2] = tmp
+        #     q[:, 1] += self.n_predicates // 2
+        ranks = model.get_time_ranking(q, self.time_to_skip)
+        mean_reciprocal_rank = torch.mean(1. / ranks).item()
+        # hits_at[m] = torch.FloatTensor((list(map(
+        #     lambda x: torch.mean((ranks <= x).float()).item(),
+        #     at
+        # ))))
+
+        return mean_reciprocal_rank, mae, tmrr
+
+
+
+#This is for evaluation for time-interval datasets
     def time_eval(
             self, model: TKBCModel, split: str, n_queries: int = -1, missing_eval: str = 'both',
             at: Tuple[int] = (1, 3, 10)
@@ -180,7 +234,10 @@ class TemporalDataset(object):
             cur_batch.append((lhs, rel, rhs, date, full_time, only_begin, only_end, no_time))
             # once a batch is ready, call get_ranking and reset
             if len(cur_batch) == batch_size or id_event == len(eval_events) - 1:
-                cuda_batch = torch.cuda.LongTensor(cur_batch)
+                if torch.cuda.is_available():
+                    cuda_batch = torch.cuda.LongTensor(cur_batch)
+                else:
+                    cuda_batch = torch.LongTensor(cur_batch)
                 bbatch = torch.LongTensor(cur_batch)
                 batch_ranks = model.get_time_ranking(cuda_batch[:, :4], to_filter_batch, 500000)
 
@@ -269,7 +326,10 @@ class TemporalDataset(object):
             cur_batch.append((lhs, rel, rhs, date, full_time, only_begin, only_end, no_time))
             # once a batch is ready, call get_ranking and reset
             if len(cur_batch) == batch_size or id_event == len(eval_events) - 1:
-                cuda_batch = torch.cuda.LongTensor(cur_batch)
+                if torch.cuda.is_available():
+                    cuda_batch = torch.cuda.LongTensor(cur_batch)
+                else:
+                    cuda_batch = torch.LongTensor(cur_batch)
                 bbatch = torch.LongTensor(cur_batch)
                 batch_ranks = model.get_time_ranking(cuda_batch[:, :4], to_filter_batch, 500000)
                 for rank, predicate in zip(batch_ranks, bbatch[:, 1]):
@@ -291,7 +351,10 @@ class TemporalDataset(object):
             permutation = torch.randperm(len(test))[:n_queries]
             test = test[permutation]
 
-        truth, scores = model.get_auc(test.cuda())
+        if torch.cuda.is_available():
+            truth, scores = model.get_auc(test.cuda())
+        else:
+            truth, scores = model.get_auc(test)
 
         return {
             'micro': average_precision_score(truth, scores, average='micro'),

@@ -58,6 +58,16 @@ parser.add_argument(
     help="Use a specific embedding for non temporal relations"
 )
 
+parser.add_argument(
+    '--time_eval', default=False, action="store_true",
+    help="Do Time Prediction, rather than entity prediction"
+)
+
+parser.add_argument(
+    '--gpu', default=False, action="store_true",
+    help="Use gpu or cpu"
+)
+
 
 args = parser.parse_args()
 
@@ -69,7 +79,8 @@ model = {
     'TComplEx': TComplEx(sizes, args.rank, no_time_emb=args.no_time_emb),
     'TNTComplEx': TNTComplEx(sizes, args.rank, no_time_emb=args.no_time_emb),
 }[args.model]
-model = model.cuda()
+if args.gpu:
+    model = model.cuda()
 
 
 opt = optim.Adagrad(model.parameters(), lr=args.learning_rate)
@@ -109,22 +120,41 @@ for epoch in range(args.max_epochs):
         h = (hits['lhs'] + hits['rhs']) / 2.
         return {'MRR': m, 'hits@[1,3,10]': h}
 
-    if epoch < 0 or (epoch + 1) % args.valid_freq == 0:
-        if dataset.has_intervals():
-            valid, test, train = [
-                dataset.eval(model, split, -1 if split != 'train' else 50000)
-                for split in ['valid', 'test', 'train']
-            ]
-            print("valid: ", valid)
-            print("test: ", test)
-            print("train: ", train)
+    def avg_time(mrrs, maes, t_mrrs):
+        """
+        aggregate metrics for missing lhs and rhs
+        :param mrrs: d
+        :param hits:
+        :return:
+        """
+        return {'MRR': mrrs, 'MAE': maes, 't_mrr':t_mrrs}
 
-        else:
+    if epoch < 0 or (epoch + 1) % args.valid_freq == 0:
+        if args.time_eval:
             valid, test, train = [
-                avg_both(*dataset.eval(model, split, -1 if split != 'train' else 50000))
+                avg_time(*dataset.eval_time(model, split, -1 if split != 'train' else 50000))
                 for split in ['valid', 'test', 'train']
             ]
-            print("valid: ", valid['MRR'])
-            print("test: ", test['MRR'])
-            print("train: ", train['MRR'])
+            print("train: MRR-T ", train['MRR'])
+            print("valid: MRR-T", valid['MRR'])
+            print("test: MRR-T", test['MRR'])
+        else:
+            if dataset.has_intervals():
+                valid, test, train = [
+                    dataset.eval(model, split, -1 if split != 'train' else 50000)
+                    for split in ['valid', 'test', 'train']
+                ]
+                print("train: ", train['MRR'])
+                print("valid: ", valid)
+                print("test: ", test)
+
+            else:
+                valid, test, train = [
+                    avg_both(*dataset.eval(model, split, -1 if split != 'train' else 50000))
+                    for split in ['valid', 'test', 'train']
+                ]
+                print("train: ", train['MRR'])
+                print("valid: ", valid['MRR'])
+                print("test: ", test['MRR'])
+
 

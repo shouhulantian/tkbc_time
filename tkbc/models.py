@@ -14,6 +14,9 @@ class TKBCModel(nn.Module, ABC):
     def get_rhs(self, chunk_begin: int, chunk_size: int):
         pass
 
+    def get_time_rhs(self, chunk_begin: int, chunk_size: int):
+        pass
+
     @abstractmethod
     def get_queries(self, queries: torch.Tensor):
         pass
@@ -25,6 +28,13 @@ class TKBCModel(nn.Module, ABC):
     @abstractmethod
     def forward_over_time(self, x: torch.Tensor):
         pass
+
+    def batch_mul(self, x, y):
+        if len(x.shape) != len(y.shape):
+            result = torch.einsum('ij,ikj->ik', [x, y])
+        else:
+            result = torch.einsum('ij,kj->ik', [x, y])
+        return result
 
     def get_ranking(
             self, queries: torch.Tensor,
@@ -98,7 +108,10 @@ class TKBCModel(nn.Module, ABC):
                 scores = self.forward_over_time(these_queries)
                 all_scores.append(scores.cpu().numpy())
                 if all_ts_ids is None:
-                    all_ts_ids = torch.arange(0, scores.shape[1]).cuda()[None, :]
+                    if torch.cuda.is_available():
+                        all_ts_ids = torch.arange(0, scores.shape[1]).cuda()[None, :]
+                    else:
+                        all_ts_ids = torch.arange(0, scores.shape[1])[None, :]
                 assert not torch.any(torch.isinf(scores) + torch.isnan(scores)), "inf or nan scores"
                 truth = (all_ts_ids <= these_queries[:, 4][:, None]) * (all_ts_ids >= these_queries[:, 3][:, None])
                 all_truth.append(truth.cpu().numpy())
@@ -121,15 +134,19 @@ class TKBCModel(nn.Module, ABC):
         ranks = torch.ones(len(queries))
         with torch.no_grad():
             c_begin = 0
-            q = self.get_queries(queries)
+            #q = self.get_queries(queries)
             targets = self.score(queries)
             while c_begin < self.sizes[2]:
-                rhs = self.get_rhs(c_begin, chunk_size)
-                scores = q @ rhs
+                scores = self.forward_over_time(queries)
+                # time_q = self.get_time_queries(queries)
+                # rhs = self.get_rhs(c_begin, chunk_size)
+                # scores = time_q @ rhs
                 # set filtered and true scores to -1e6 to be ignored
                 # take care that scores are chunked
+
                 for i, (query, filter) in enumerate(zip(queries, filters)):
-                    filter_out = filter + [query[2].item()]
+                    filter_out = filters[(query[0].item(), query[1].item(), query[2].item())]
+                    filter_out = [int(i) for i in filter_out]
                     if chunk_size < self.sizes[2]:
                         filter_in_chunk = [
                             int(x - c_begin) for x in filter_out
@@ -314,6 +331,11 @@ class TComplEx(TKBCModel):
                chunk_begin:chunk_begin + chunk_size
                ].transpose(0, 1)
 
+    def get_time_rhs(self, chunk_begin: int, chunk_size: int):
+        return self.embeddings[2].weight.data[
+               chunk_begin:chunk_begin + chunk_size
+               ].transpose(0, 1)
+
     def get_queries(self, queries: torch.Tensor):
         lhs = self.embeddings[0](queries[:, 0])
         rel = self.embeddings[1](queries[:, 1])
@@ -327,6 +349,20 @@ class TComplEx(TKBCModel):
             lhs[1] * rel[0] * time[0] + lhs[0] * rel[1] * time[0] +
             lhs[0] * rel[0] * time[1] - lhs[1] * rel[1] * time[1]
         ], 1)
+
+    # def get_time_queries(self,queries: torch.Tensor):
+    #     lhs = self.embeddings[0](queries[:, 0])
+    #     rel = self.embeddings[1](queries[:, 1])
+    #     time = self.embeddings[2].weight.data
+    #     lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+    #     rel = rel[:, :self.rank], rel[:, self.rank:]
+    #     time = time[:, :self.rank], time[:, self.rank:]
+    #     return torch.cat([
+    #         lhs[0] * rel[0] * time[0] - lhs[1] * rel[1] * time[0] -
+    #         lhs[1] * rel[0] * time[1] - lhs[0] * rel[1] * time[1],
+    #         lhs[1] * rel[0] * time[0] + lhs[0] * rel[1] * time[0] +
+    #         lhs[0] * rel[0] * time[1] - lhs[1] * rel[1] * time[1]
+    #     ], 1)
 
 
 class TNTComplEx(TKBCModel):
@@ -440,6 +476,11 @@ class TNTComplEx(TKBCModel):
 
     def get_rhs(self, chunk_begin: int, chunk_size: int):
         return self.embeddings[0].weight.data[
+               chunk_begin:chunk_begin + chunk_size
+               ].transpose(0, 1)
+
+    def get_time_rhs(self, chunk_begin: int, chunk_size: int):
+        return self.embeddings[2].weight.data[
                chunk_begin:chunk_begin + chunk_size
                ].transpose(0, 1)
 
