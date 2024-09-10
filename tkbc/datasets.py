@@ -156,8 +156,9 @@ class TemporalDataset(object):
         #     q[:, 0] = q[:, 2]
         #     q[:, 2] = tmp
         #     q[:, 1] += self.n_predicates // 2
-        ranks = model.get_time_ranking(q, self.time_to_skip)
+        ranks, maes = model.get_time_ranking(q, self.time_to_skip)
         mean_reciprocal_rank = torch.mean(1. / ranks).item()
+        mae = torch.mean(maes).item()
         # hits_at[m] = torch.FloatTensor((list(map(
         #     lambda x: torch.mean((ranks <= x).float()).item(),
         #     at

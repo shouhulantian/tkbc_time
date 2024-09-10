@@ -132,6 +132,7 @@ class TKBCModel(nn.Module, ABC):
         if chunk_size < 0:
             chunk_size = self.sizes[2]
         ranks = torch.ones(len(queries))
+        MAEs = torch.ones(len(queries))
         with torch.no_grad():
             c_begin = 0
             #q = self.get_queries(queries)
@@ -144,7 +145,9 @@ class TKBCModel(nn.Module, ABC):
                 # set filtered and true scores to -1e6 to be ignored
                 # take care that scores are chunked
 
-                for i, (query, filter) in enumerate(zip(queries, filters)):
+                for i, query in enumerate(queries):
+                    pred_mae = torch.argmax(scores)
+                    MAEs[i] = abs(pred_mae-query[3])
                     filter_out = filters[(query[0].item(), query[1].item(), query[2].item())]
                     filter_out = [int(i) for i in filter_out]
                     if chunk_size < self.sizes[2]:
@@ -160,9 +163,8 @@ class TKBCModel(nn.Module, ABC):
                 ranks += torch.sum(
                     (scores >= targets).float(), dim=1
                 ).cpu()
-
                 c_begin += chunk_size
-        return ranks
+        return ranks, MAEs
 
 
 class ComplEx(TKBCModel):
