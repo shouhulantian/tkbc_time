@@ -146,7 +146,7 @@ class TKBCModel(nn.Module, ABC):
                 # take care that scores are chunked
 
                 for i, query in enumerate(queries):
-                    pred_mae = torch.argmax(scores)
+                    pred_mae = torch.argmax(scores[i])
                     MAEs[i] = abs(pred_mae-query[3])
                     filter_out = filters[(query[0].item(), query[1].item(), query[2].item())]
                     filter_out = [int(i) for i in filter_out]
