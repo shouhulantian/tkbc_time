@@ -228,6 +228,7 @@ class TKBCModel(nn.Module, ABC):
                     tmrr = positive_mrr-negative_mrr
                     print('******')
                     print(len(test_target))
+                    print(positive_rank)
                     print(positive_mrr)
                     print(negative_mrr)
                     tmrrs[i] = tmrr
