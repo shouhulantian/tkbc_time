@@ -164,6 +164,7 @@ class TKBCModel(nn.Module, ABC):
                     (scores >= targets).float(), dim=1
                 ).cpu()
                 c_begin += chunk_size
+                print(ranks)
         return ranks, MAEs
 
 
