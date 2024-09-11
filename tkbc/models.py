@@ -219,7 +219,7 @@ class TKBCModel(nn.Module, ABC):
                     time_diff=torch.from_numpy(time_diff)
                     if torch.cuda.is_available():
                         time_diff=time_diff.cuda()
-                    negative_index = (scores[i] > torch.min(scores[i][target]))
+                    negative_index = (scores[i] > torch.min(scores[i][test_target]))
                     negative_index[target] = False
                     negative_score = 1 / (rank_sort_index+1) * time_diff
                     negative_mrr = sum(negative_score[negative_index])/len(positive_rank)
