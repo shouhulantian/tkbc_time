@@ -132,6 +132,7 @@ class TKBCModel(nn.Module, ABC):
         if chunk_size < 0:
             chunk_size = self.sizes[2]
         ranks = torch.ones(len(queries))
+        ranks_2 = torch.ones(len(queries))
         MAEs = torch.ones(len(queries))
         with torch.no_grad():
             c_begin = 0
@@ -159,7 +160,9 @@ class TKBCModel(nn.Module, ABC):
                         assert max_to_filter < scores.shape[1], f"fuck {scores.shape[1]} {max_to_filter}"
                         scores[i, filter_in_chunk] = -1e6
                     else:
+                        t_score = scores[i,query[3]].clone().detach()
                         scores[i, filter_out] = -1e6
+                        ranks_2[i] = scores[i] >= t_score
                     # _, rank_sort_index = torch.sort(scores[i])
                     # print(rank_sort_index[query[3]])
                 ranks += torch.sum(
@@ -167,7 +170,8 @@ class TKBCModel(nn.Module, ABC):
                 ).cpu()
                 MAEs = MAEs.cpu()
                 c_begin += chunk_size
-                # print(ranks)
+                print(ranks)
+                print(ranks_2)
                 # print('c_begin:',c_begin)
         return ranks, MAEs
 
