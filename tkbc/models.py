@@ -211,7 +211,7 @@ class TKBCModel(nn.Module, ABC):
 
                     time_diff = np.ones([len(test_target), self.sizes[3]])
                     for i in range(len(test_target)):
-                        time_diff[i] = ((np.arange(0,self.sizes[3],1) - test_target[i]))
+                        time_diff[i] = abs(np.arange(0,self.sizes[3],1) - test_target[i])
                     time_diff = np.min(time_diff,axis=0)/self.sizes[3]
                     time_diff=torch.from_numpy(time_diff)
                     if torch.cuda.is_available():
