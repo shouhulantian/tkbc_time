@@ -141,6 +141,9 @@ for epoch in range(args.max_epochs):
             print("train: MAE ", train['MAE'])
             print("valid: MAE", valid['MAE'])
             print("test: MAE", test['MAE'])
+            print("train: tmrr ", train['t_mrr'])
+            print("valid: tmrr", valid['t_mrr'])
+            print("test: tmrr", test['t_mrr'])
         else:
             if dataset.has_intervals():
                 valid, test, train = [
