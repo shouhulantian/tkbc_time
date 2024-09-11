@@ -146,11 +146,14 @@ class TemporalDataset(object):
     ):
         if self.events is not None:
             pass #time interval dataset, implementation in the future
-        test = self.data_event[split]
+        test_event = self.data_event[split]
+        test = self.data[split]
         if torch.cuda.is_available():
             examples = torch.from_numpy(test.astype('int64')).cuda()
+            examples_event = torch.from_numpy(test_event.astype('int64')).cuda()
         else:
             examples = torch.from_numpy(test.astype('int64'))
+            examples_event = torch.from_numpy(test_event.astype('int64'))
         # We do not perform rhs for time prediction, only lhs
         # missing = [missing_eval]
         # if missing_eval == 'both':
@@ -172,7 +175,7 @@ class TemporalDataset(object):
         #     q[:, 0] = q[:, 2]
         #     q[:, 2] = tmp
         #     q[:, 1] += self.n_predicates // 2
-        tmrrs = model.get_tmrr_ranking(examples, self.time_to_skip, self.data_event_filter[split])
+        tmrrs = model.get_tmrr_ranking(examples_event, self.time_to_skip, self.data_event_filter[split])
         ranks, maes = model.get_time_ranking(q, self.time_to_skip)
         mean_reciprocal_rank = torch.mean(1. / ranks).item()
         mae = torch.mean(maes).item()
