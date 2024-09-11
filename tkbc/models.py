@@ -230,11 +230,11 @@ class TKBCModel(nn.Module, ABC):
                     if negative_mrr !=0:
                         negative_mrr = negative_mrr.cpu().item()
                     tmrr = positive_mrr-negative_mrr
-                    print('******')
-                    print(len(test_target))
-                    print(positive_rank)
-                    print(positive_mrr)
-                    print(negative_mrr)
+                    # print('******')
+                    # print(len(test_target))
+                    # print(positive_rank)
+                    # print(positive_mrr)
+                    # print(negative_mrr)
                     tmrrs[i] = tmrr
                 tmrrs = tmrrs.cpu()
                 c_begin += chunk_size
