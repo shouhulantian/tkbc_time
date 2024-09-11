@@ -166,6 +166,7 @@ class TKBCModel(nn.Module, ABC):
                 MAEs = MAEs.cpu()
                 c_begin += chunk_size
                 print(ranks)
+                print('c_begin:',c_begin)
         return ranks, MAEs
 
     def get_tmrr_ranking(
@@ -223,8 +224,8 @@ class TKBCModel(nn.Module, ABC):
                     if negative_mrr !=0:
                         negative_mrr = negative_mrr.cpu().item()
                     tmrr = positive_mrr-negative_mrr
-                    # print('******')
-                    # # print(positive_mrr)
+                    print('******')
+                    print(positive_mrr)
                     # # print(negative_mrr)
                     # # print(tmrr)
                     tmrrs[i] = tmrr
