@@ -229,6 +229,7 @@ class TKBCModel(nn.Module, ABC):
                     print(tmrr)
                     tmrrs[i] = tmrr
                 tmrrs = tmrrs.cpu()
+                c_begin += chunk_size
                 #print(ranks)
         return tmrrs
 
