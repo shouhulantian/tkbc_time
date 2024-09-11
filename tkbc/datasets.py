@@ -175,8 +175,9 @@ class TemporalDataset(object):
         #     q[:, 0] = q[:, 2]
         #     q[:, 2] = tmp
         #     q[:, 1] += self.n_predicates // 2
-        tmrrs = model.get_tmrr_ranking(examples_event, self.time_to_skip, self.data_event_filter[split])
+
         ranks, maes = model.get_time_ranking(q, self.time_to_skip)
+        tmrrs = model.get_tmrr_ranking(examples_event, self.time_to_skip, self.data_event_filter[split])
 
         mean_reciprocal_rank = torch.mean(1. / ranks).item()
         mae = torch.mean(maes).item()

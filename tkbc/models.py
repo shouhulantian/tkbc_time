@@ -162,7 +162,7 @@ class TKBCModel(nn.Module, ABC):
                     else:
                         t_score = scores[i,query[3]].clone().detach()
                         scores[i, filter_out] = -1e6
-                        ranks_2[i] = scores[i] >= t_score
+                        ranks_2[i] = torch.sum((scores[i] >= t_score).float()).cpu()
                     # _, rank_sort_index = torch.sort(scores[i])
                     # print(rank_sort_index[query[3]])
                 ranks += torch.sum(
