@@ -170,10 +170,10 @@ class TKBCModel(nn.Module, ABC):
                 ).cpu()
                 MAEs = MAEs.cpu()
                 c_begin += chunk_size
-                print(ranks)
-                print(ranks_2)
+                # print(ranks)
+                # print(ranks_2)
                 # print('c_begin:',c_begin)
-        return ranks, MAEs
+        return ranks_2, MAEs
 
     def get_tmrr_ranking(
             self, queries: torch.Tensor, filters_all: List[List[int]], filters, chunk_size: int = -1
