@@ -223,6 +223,7 @@ class TKBCModel(nn.Module, ABC):
                     if negative_mrr !=0:
                         negative_mrr = negative_mrr.cpu().item()
                     tmrr = positive_mrr-negative_mrr
+                    print(tmrr)
                     tmrrs[i] = tmrr
                 tmrrs = tmrrs.cpu()
                 #print(ranks)
