@@ -131,17 +131,17 @@ for epoch in range(args.max_epochs):
 
     if epoch < 0 or (epoch + 1) % args.valid_freq == 0:
         if args.time_eval:
-            valid, test, train = [
+            valid, test = [
                 avg_time(*dataset.eval_time(model, split, -1 if split != 'train' else 50000))
-                for split in ['valid', 'test', 'train']
+                for split in ['valid', 'test']
             ]
-            print("train: MRR-T ", train['MRR'])
+            #print("train: MRR-T ", train['MRR'])
             print("valid: MRR-T", valid['MRR'])
             print("test: MRR-T", test['MRR'])
-            print("train: MAE ", train['MAE'])
+            #print("train: MAE ", train['MAE'])
             print("valid: MAE", valid['MAE'])
             print("test: MAE", test['MAE'])
-            print("train: tmrr ", train['t_mrr'])
+            #print("train: tmrr ", train['t_mrr'])
             print("valid: tmrr", valid['t_mrr'])
             print("test: tmrr", test['t_mrr'])
         else:
