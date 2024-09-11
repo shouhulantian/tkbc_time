@@ -222,14 +222,14 @@ class TKBCModel(nn.Module, ABC):
                     negative_index = (scores[i] > torch.min(scores[i][test_target]))
                     negative_index[target] = False
                     negative_score = 1 / (rank_sort_index+1) * time_diff
-                    negative_mrr = sum(negative_score[negative_index])/len(positive_rank)
+                    negative_mrr = sum(negative_score[negative_index])/len(test_target)
                     if negative_mrr !=0:
                         negative_mrr = negative_mrr.cpu().item()
                     tmrr = positive_mrr-negative_mrr
                     print('******')
+                    print(len(test_target))
                     print(positive_mrr)
                     print(negative_mrr)
-                    print(tmrr)
                     tmrrs[i] = tmrr
                 tmrrs = tmrrs.cpu()
                 c_begin += chunk_size
