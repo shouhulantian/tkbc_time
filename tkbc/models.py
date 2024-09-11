@@ -160,6 +160,8 @@ class TKBCModel(nn.Module, ABC):
                         scores[i, filter_in_chunk] = -1e6
                     else:
                         scores[i, filter_out] = -1e6
+                    # _, rank_sort_index = torch.sort(scores[i])
+                    # print(rank_sort_index[query[3]])
                 ranks += torch.sum(
                     (scores >= targets).float(), dim=1
                 ).cpu()
@@ -199,7 +201,7 @@ class TKBCModel(nn.Module, ABC):
                     test_target = filters[(int(triple[0]),int(triple[1]),int(triple[2]))]
                     target = [int(i) for i in target]
                     test_target = [int(i) for i in test_target]
-                    _, rank_sort_index = torch.sort(scores[i])
+                    _, rank_sort_index = torch.sort(scores[i],descending=True)
 
                     positive_rank = []
                     for i in range(len(test_target)):
