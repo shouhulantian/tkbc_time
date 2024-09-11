@@ -131,7 +131,7 @@ class TKBCModel(nn.Module, ABC):
         """
         if chunk_size < 0:
             chunk_size = self.sizes[2]
-        ranks = torch.ones(len(queries))
+        ranks = torch.zeros(len(queries))
         MAEs = torch.ones(len(queries))
         with torch.no_grad():
             c_begin = 0
@@ -163,9 +163,70 @@ class TKBCModel(nn.Module, ABC):
                 ranks += torch.sum(
                     (scores >= targets).float(), dim=1
                 ).cpu()
+                MAEs = MAEs.cpu()
                 c_begin += chunk_size
-                print(ranks)
+                #print(ranks)
         return ranks, MAEs
+
+    def get_tmrr_ranking(
+            self, queries: torch.Tensor, filters_all: List[List[int]], filters, chunk_size: int = -1
+    ):
+        """
+        Returns filtered ranking for a batch of queries ordered by timestamp.
+        :param queries: a torch.LongTensor of quadruples (lhs, rel, rhs, timestamp)
+        :param filters: ordered filters
+        :param chunk_size: maximum number of candidates processed at once
+        :return:
+        """
+        if chunk_size < 0:
+            chunk_size = self.sizes[2]
+        tmrrs = torch.zeros(len(queries))
+        with torch.no_grad():
+            c_begin = 0
+            #q = self.get_queries(queries)
+            #targets = self.score(queries)
+            while c_begin < self.sizes[2]:
+                scores = self.forward_over_time(queries)
+                # time_q = self.get_time_queries(queries)
+                # rhs = self.get_rhs(c_begin, chunk_size)
+                # scores = time_q @ rhs
+                # set filtered and true scores to -1e6 to be ignored
+                # take care that scores are chunked
+
+                for i, triple in enumerate(queries):
+                    target = filters_all[(int(triple[0]),int(triple[1]),int(triple[2]))]
+                    test_target = filters[(int(triple[0]),int(triple[1]),int(triple[2]))]
+                    target = [int(i) for i in target]
+                    test_target = [int(i) for i in test_target]
+                    _, rank_sort_index = torch.sort(scores[i])
+
+                    positive_rank = []
+                    for i in range(len(test_target)):
+                        t_score = scores[i].clone().detach()
+                        t_score[target] = -1e6
+                        target_score = scores[i][test_target[i]]
+                        rank_triple = torch.sum((t_score > target_score).float()).cpu().item() + 1
+                        positive_rank.append(rank_triple)
+                    positive_mrr = np.mean([1/i for i in positive_rank])
+
+                    time_diff = np.ones([len(test_target), self.sizes[3]])
+                    for i in range(len(test_target)):
+                        time_diff[i] = ((np.arange(0,self.sizes[3],1) - test_target[i]))
+                    time_diff = np.min(time_diff,axis=0)/self.sizes[3]
+                    time_diff=torch.from_numpy(time_diff)
+                    if torch.cuda.is_available():
+                        time_diff=time_diff.cuda()
+                    negative_index = (scores[i] > torch.min(scores[i][target]))
+                    negative_index[target] = False
+                    negative_score = 1 / (rank_sort_index+1) * time_diff
+                    negative_mrr = sum(negative_score[negative_index])/len(positive_rank)
+                    if negative_mrr !=0:
+                        negative_mrr = negative_mrr.cpu().item()
+                    tmrr = positive_mrr-negative_mrr
+                    tmrrs[i] = tmrr
+                tmrrs = tmrrs.cpu()
+                #print(ranks)
+        return tmrrs
 
 
 class ComplEx(TKBCModel):

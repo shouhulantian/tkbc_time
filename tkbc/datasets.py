@@ -64,10 +64,12 @@ class TemporalDataset(object):
             self.to_skip: Dict[str, Dict[Tuple[int, int, int], List[int]]] = pickle.load(inp_f)
             inp_f.close()
             time_f = open(str(self.root / f'time_to_skip.pickle'), 'rb')
-            self.time_to_skip = pickle.load(time_f)
+            self.time_to_skip: Dict[str, Dict[Tuple[int, int, int], List[int]]] = pickle.load(time_f)
             time_f.close()
 
-
+        self.data_event, self.data_event_filter = {}, {}
+        for f in ['train', 'test', 'valid']:
+            self.data_event[f], self.data_event_filter[f]= self.get_time_examples(f)
         # If dataset has events, it's wikidata.
         # For any relation that has no beginning & no end:
         # add special beginning = end = no_timestamp, increase n_timestamps by one.
@@ -77,6 +79,20 @@ class TemporalDataset(object):
 
     def get_examples(self, split):
         return self.data[split]
+
+    def get_time_examples(self, split):
+        triples = []
+        filters = {'rhs':defaultdict(set)}
+        examples = self.get_examples(split)
+        for fact in examples:
+            triples.append((fact[0], fact[1], fact[2]))
+            filters['rhs'][(fact[0], fact[1], fact[2])].add(fact[3])
+        triples = list(set(triples))
+        sorted_filters = {}
+        for k, v in filters['rhs'].items():
+            sorted_filters[k] = sorted(list(v))
+        return np.array(triples,dtype=int), sorted_filters
+
 
     def get_train(self):
         copy = np.copy(self.data['train'])
@@ -130,7 +146,7 @@ class TemporalDataset(object):
     ):
         if self.events is not None:
             pass #time interval dataset, implementation in the future
-        test = self.get_examples(split)
+        test = self.data_event[split]
         if torch.cuda.is_available():
             examples = torch.from_numpy(test.astype('int64')).cuda()
         else:
@@ -156,9 +172,11 @@ class TemporalDataset(object):
         #     q[:, 0] = q[:, 2]
         #     q[:, 2] = tmp
         #     q[:, 1] += self.n_predicates // 2
+        tmrrs = model.get_tmrr_ranking(examples, self.time_to_skip, self.data_event_filter[split])
         ranks, maes = model.get_time_ranking(q, self.time_to_skip)
         mean_reciprocal_rank = torch.mean(1. / ranks).item()
         mae = torch.mean(maes).item()
+        tmrr = torch.mean(tmrrs).item()
         # hits_at[m] = torch.FloatTensor((list(map(
         #     lambda x: torch.mean((ranks <= x).float()).item(),
         #     at
