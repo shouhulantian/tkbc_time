@@ -147,7 +147,7 @@ class TemporalDataset(object):
         if self.events is not None:
             pass #time interval dataset, implementation in the future
         test_event = self.data_event[split]
-        test = self.data[split]
+        test = self.get_examples(split)
         if torch.cuda.is_available():
             examples = torch.from_numpy(test.astype('int64')).cuda()
             examples_event = torch.from_numpy(test_event.astype('int64')).cuda()
