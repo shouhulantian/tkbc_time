@@ -165,7 +165,7 @@ class TKBCModel(nn.Module, ABC):
                 ).cpu()
                 MAEs = MAEs.cpu()
                 c_begin += chunk_size
-                #print(ranks)
+                print(ranks)
         return ranks, MAEs
 
     def get_tmrr_ranking(
