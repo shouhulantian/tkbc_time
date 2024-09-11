@@ -131,7 +131,7 @@ class TKBCModel(nn.Module, ABC):
         """
         if chunk_size < 0:
             chunk_size = self.sizes[2]
-        ranks = torch.zeros(len(queries))
+        ranks = torch.ones(len(queries))
         MAEs = torch.ones(len(queries))
         with torch.no_grad():
             c_begin = 0
