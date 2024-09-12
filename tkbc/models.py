@@ -137,7 +137,7 @@ class TKBCModel(nn.Module, ABC):
         with torch.no_grad():
             c_begin = 0
             #q = self.get_queries(queries)
-            targets = self.score(queries)
+            #targets = self.score(queries)
             while c_begin < self.sizes[2]:
                 scores = self.forward_over_time(queries)
                 # time_q = self.get_time_queries(queries)
@@ -162,12 +162,12 @@ class TKBCModel(nn.Module, ABC):
                     else:
                         t_score = scores[i,query[3]].clone().detach()
                         scores[i, filter_out] = -1e6
-                        ranks_2[i] = torch.sum((scores[i] > t_score).float()).cpu() + 1
+                    ranks_2[i] = torch.sum((scores[i] > t_score).float()).cpu() + 1
                     # _, rank_sort_index = torch.sort(scores[i])
                     # print(rank_sort_index[query[3]])
-                ranks += torch.sum(
-                    (scores >= targets).float(), dim=1
-                ).cpu()
+                # ranks += torch.sum(
+                #     (scores >= targets).float(), dim=1
+                # ).cpu()
                 MAEs = MAEs.cpu()
                 c_begin += chunk_size
                 # print(ranks)
