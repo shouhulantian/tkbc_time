@@ -203,22 +203,22 @@ class TKBCModel(nn.Module, ABC):
                 for i, triple in enumerate(queries):
                     target = filters_all[(int(triple[0]),int(triple[1]),int(triple[2]))]
                     test_target = filters[(int(triple[0]),int(triple[1]),int(triple[2]))]
-                    target = [int(i) for i in target]
-                    test_target = [int(i) for i in test_target]
+                    target = [int(k) for k in target]
+                    test_target = [int(k) for k in test_target]
                     _, rank_sort_index = torch.sort(scores[i],descending=True)
 
                     positive_rank = []
-                    for i in range(len(test_target)):
+                    for j in range(len(test_target)):
                         t_score = scores[i].clone().detach()
                         t_score[target] = -1e6
-                        target_score = scores[i][test_target[i]]
+                        target_score = scores[i][test_target[j]]
                         rank_triple = torch.sum((t_score > target_score).float()).cpu().item() + 1
                         positive_rank.append(rank_triple)
-                    positive_mrr = np.mean([1/i for i in positive_rank])
+                    positive_mrr = np.mean([1/k for k in positive_rank])
 
                     time_diff = np.ones([len(test_target), self.sizes[3]])
-                    for i in range(len(test_target)):
-                        time_diff[i] = abs(np.arange(0,self.sizes[3],1) - test_target[i])
+                    for j in range(len(test_target)):
+                        time_diff[j] = abs(np.arange(0,self.sizes[3],1) - test_target[j])
                     time_diff = np.min(time_diff,axis=0)/self.sizes[3]
                     time_diff=torch.from_numpy(time_diff)
                     if torch.cuda.is_available():
