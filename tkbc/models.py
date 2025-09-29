@@ -335,6 +335,7 @@ class ComplEx_RoPE(TKBCModel):
         # Precompute rotary frequencies
         inv_freq = 1.0 / (rope_base ** (torch.arange(rank, dtype=torch.float32) / rank))
         self.register_buffer("rope_inv_freq", inv_freq, persistent=False)
+        self.T_scale = sizes[3]/365
 
     @staticmethod
     def has_time():
@@ -347,7 +348,7 @@ class ComplEx_RoPE(TKBCModel):
         lhs = self.embeddings[0](x[:, 0])
         rel = self.embeddings[1](x[:, 1])
         rhs = self.embeddings[0](x[:, 2])
-        time_id = x[:,3]
+        time_id = x[:,3] / self.T_scale
 
         lhs = lhs[:, :self.rank], lhs[:, self.rank:]
         rel = rel[:, :self.rank], rel[:, self.rank:]
@@ -370,7 +371,7 @@ class ComplEx_RoPE(TKBCModel):
         lhs = self.embeddings[0](x[:, 0])
         rel = self.embeddings[1](x[:, 1])
         rhs = self.embeddings[0](x[:, 2])
-        time_id = x[:,3]
+        time_id = x[:,3] / self.T_scale
 
         lhs = lhs[:, :self.rank], lhs[:, self.rank:]
         rel = rel[:, :self.rank], rel[:, self.rank:]
@@ -411,7 +412,7 @@ class ComplEx_RoPE(TKBCModel):
         rel = self.embeddings[1](queries[:, 1])
         lhs = lhs[:, :self.rank], lhs[:, self.rank:]
         rel = rel[:, :self.rank], rel[:, self.rank:]
-        time_id = queries[:, 3]
+        time_id = queries[:, 3] / self.T_scale
 
         # --- Step 1: complex multiply lhs * rel ---
         lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
