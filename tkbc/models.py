@@ -335,7 +335,8 @@ class ComplEx_RoPE(TKBCModel):
         # Precompute rotary frequencies
         inv_freq = 1.0 / (rope_base ** (torch.arange(rank, dtype=torch.float32) / rank))
         self.register_buffer("rope_inv_freq", inv_freq, persistent=False)
-        self.T_scale = sizes[3]/365
+        #self.T_scale = sizes[3]/365
+        self.T_scale = 1
 
     @staticmethod
     def has_time():

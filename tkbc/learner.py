@@ -68,6 +68,11 @@ parser.add_argument(
     help="Use gpu or cpu"
 )
 
+parser.add_argument(
+    '--rope_base', default=10000.0, type=float,
+    help="base value for frequency calcuation"
+)
+
 
 args = parser.parse_args()
 
@@ -78,7 +83,7 @@ model = {
     'ComplEx': ComplEx(sizes, args.rank),
     'TComplEx': TComplEx(sizes, args.rank, no_time_emb=args.no_time_emb),
     'TNTComplEx': TNTComplEx(sizes, args.rank, no_time_emb=args.no_time_emb),
-    'ComplEx_RoPE': ComplEx_RoPE(sizes, args.rank)
+    'ComplEx_RoPE': ComplEx_RoPE(sizes, args.rank, rope_base=args.rope_base)
 }[args.model]
 num_params = sum(p.numel() for p in model.parameters())
 print(num_params)
