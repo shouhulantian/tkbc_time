@@ -176,3 +176,5 @@ for epoch in range(args.max_epochs):
                     print('best_mrr',best_res_test[0])
                     print('best_hits',best_res_test[1])
 
+print(best_res_test)
+
