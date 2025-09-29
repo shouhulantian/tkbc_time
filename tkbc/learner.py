@@ -26,7 +26,7 @@ parser.add_argument(
     help="Model in {}".format(models)
 )
 parser.add_argument(
-    '--max_epochs', default=50, type=int,
+    '--max_epochs', default=200, type=int,
     help="Number of epochs."
 )
 parser.add_argument(
@@ -85,6 +85,8 @@ print(num_params)
 if args.gpu:
     model = model.cuda()
 
+best_hits1 = 0
+best_res_test = {}
 
 opt = optim.Adagrad(model.parameters(), lr=args.learning_rate)
 
@@ -165,5 +167,12 @@ for epoch in range(args.max_epochs):
                 print("train: ", train['MRR'], train['hits@[1,3,10]'])
                 print("valid: ", valid['MRR'], valid['hits@[1,3,10]'])
                 print("test: ", test['MRR'], test['hits@[1,3,10]'])
-
+                if valid['hits@[1,3,10]'][0] > best_hits1:
+                    # torch.save({'MRR': test['MRR'], 'Hist': test['hits@[1,3,10]'], 'MR': test['MR'],
+                    #             'param': model.state_dict()}, '{}/best.pth'.format(save_path, args.model, args.dataset))
+                    print('best')
+                    best_hits1 = valid['hits@[1,3,10]'][0]
+                    best_res_test = [test['MRR'], test['hits@[1,3,10]']]
+                    print('best_mrr',best_res_test[0])
+                    print('best_hits',best_res_test[1])
 
