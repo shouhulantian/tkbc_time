@@ -122,7 +122,7 @@ def prepare_dataset(path, name):
 
 
 if __name__ == "__main__":
-    datasets = ['ICEWS14', 'ICEWS05-15','gdelt']
+    datasets = ['gdelt','ICEWS14', 'ICEWS05-15']
     for d in datasets:
         print("Preparing dataset {}".format(d))
         try:
