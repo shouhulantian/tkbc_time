@@ -622,6 +622,121 @@ class ComplEx_RoPE2(TKBCModel):
         imag_rot = real * sin + imag * cos
         return real_rot, imag_rot
 
+class ComplEx_RoPE3(TKBCModel):
+    def __init__(
+            self, sizes: Tuple[int, int, int, int], rank: int,
+            init_size: float = 1e-3, rope_base: float = 10000.0
+    ):
+        super(ComplEx_RoPE3, self).__init__()
+        self.sizes = sizes
+        self.rank = rank
+
+        self.embeddings = nn.ModuleList([
+            nn.Embedding(s, 2 * rank, sparse=True)
+            for s in [sizes[0], sizes[1]]
+        ])
+        self.embeddings[0].weight.data *= init_size
+        self.embeddings[1].weight.data *= init_size
+
+        inv_freq = 1.0 / (rope_base ** (torch.arange(rank, dtype=torch.float32) / rank))
+        self.register_buffer("rope_inv_freq", inv_freq, persistent=False)
+        self.T_scale = 1
+
+        self.rel_time_anchor = nn.Embedding(sizes[1], 1)
+        self.rel_time_anchor.weight.data.zero_()
+
+    @staticmethod
+    def has_time():
+        return False
+
+    def forward_over_time(self, x):
+        raise NotImplementedError("no.")
+
+    def score(self, x):
+        lhs = self.embeddings[0](x[:, 0])
+        rel = self.embeddings[1](x[:, 1])
+        rhs = self.embeddings[0](x[:, 2])
+
+        rel_anchor = self.rel_time_anchor(x[:, 1]).squeeze(-1)
+        time_id = (x[:, 3].to(rel_anchor.dtype) - rel_anchor) / self.T_scale
+
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        rhs = rhs[:, :self.rank], rhs[:, self.rank:]
+
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        return torch.sum(
+            lhs_rel_real * rhs[0] +
+            lhs_rel_imag * rhs[1],
+            1, keepdim=True
+        )
+
+    def forward(self, x):
+        lhs = self.embeddings[0](x[:, 0])
+        rel = self.embeddings[1](x[:, 1])
+        rhs = self.embeddings[0](x[:, 2])
+        rel_anchor = self.rel_time_anchor(x[:, 1]).squeeze(-1)
+        time_id = (x[:, 3].to(rel_anchor.dtype) - rel_anchor) / self.T_scale
+
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        rhs = rhs[:, :self.rank], rhs[:, self.rank:]
+
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        right = self.embeddings[0].weight
+        right = right[:, :self.rank], right[:, self.rank:]
+
+        scores = (
+                lhs_rel_real @ right[0].transpose(0, 1) +
+                lhs_rel_imag @ right[1].transpose(0, 1)
+        )
+
+        norms = (
+            torch.sqrt(lhs[0] ** 2 + lhs[1] ** 2),
+            torch.sqrt(rel[0] ** 2 + rel[1] ** 2),
+            torch.sqrt(rhs[0] ** 2 + rhs[1] ** 2)
+        )
+
+        return scores, norms, None
+
+    def get_rhs(self, chunk_begin: int, chunk_size: int):
+        return self.embeddings[0].weight.data[
+               chunk_begin:chunk_begin + chunk_size
+               ].transpose(0, 1)
+
+    def get_queries(self, queries: torch.Tensor):
+        lhs = self.embeddings[0](queries[:, 0])
+        rel = self.embeddings[1](queries[:, 1])
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        rel_anchor = self.rel_time_anchor(queries[:, 1]).squeeze(-1)
+        time_id = (queries[:, 3].to(rel_anchor.dtype) - rel_anchor) / self.T_scale
+
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        return torch.cat([
+            lhs_rel_real,
+            lhs_rel_imag
+        ], 1)
+
+    def _apply_rope(self, real: torch.Tensor, imag: torch.Tensor, time_id: torch.Tensor):
+        angles = time_id.to(real.dtype).unsqueeze(1) * self.rope_inv_freq.unsqueeze(0)
+        cos, sin = torch.cos(angles), torch.sin(angles)
+        real_rot = real * cos - imag * sin
+        imag_rot = real * sin + imag * cos
+        return real_rot, imag_rot
+
 class TComplEx(TKBCModel):
     def __init__(
             self, sizes: Tuple[int, int, int, int], rank: int,

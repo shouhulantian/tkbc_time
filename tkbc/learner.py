@@ -8,7 +8,7 @@ from torch import optim
 
 from datasets import TemporalDataset
 from optimizers import TKBCOptimizer, IKBCOptimizer
-from models import ComplEx, TComplEx, TNTComplEx, ComplEx_RoPE, ComplEx_RoPE2
+from models import ComplEx, TComplEx, TNTComplEx, ComplEx_RoPE, ComplEx_RoPE2, ComplEx_RoPE3
 from regularizers import N3, Lambda3
 
 parser = argparse.ArgumentParser(
@@ -19,7 +19,7 @@ parser.add_argument(
     help="Dataset name"
 )
 models = [
-    'ComplEx', 'TComplEx', 'TNTComplEx','ComplEx_RoPE','ComplEx_RoPE2'
+    'ComplEx', 'TComplEx', 'TNTComplEx','ComplEx_RoPE','ComplEx_RoPE2','ComplEx_RoPE3'
 ]
 parser.add_argument(
     '--model', choices=models,
@@ -85,6 +85,7 @@ model = {
     'TNTComplEx': TNTComplEx(sizes, args.rank, no_time_emb=args.no_time_emb),
     'ComplEx_RoPE': ComplEx_RoPE(sizes, args.rank, rope_base=args.rope_base),
     'ComplEx_RoPE2': ComplEx_RoPE2(sizes, args.rank, rope_base=args.rope_base),
+    'ComplEx_RoPE3': ComplEx_RoPE3(sizes, args.rank, rope_base=args.rope_base)
 }[args.model]
 num_params = sum(p.numel() for p in model.parameters())
 print(num_params)
