@@ -439,6 +439,189 @@ class ComplEx_RoPE(TKBCModel):
         imag_rot = real * sin + imag * cos
         return real_rot, imag_rot
 
+class ComplEx_RoPE2(TKBCModel):
+    def __init__(
+            self, sizes: Tuple[int, int, int, int], rank: int,
+            init_size: float = 1e-3, rope_base: float = 10000.0
+    ):
+        super(ComplEx_RoPE2, self).__init__()
+        self.sizes = sizes
+        self.rank = rank
+
+        self.embeddings = nn.ModuleList([
+            nn.Embedding(s, 2 * rank, sparse=True)
+            for s in [sizes[0], sizes[1]]
+        ])
+        self.embeddings[0].weight.data *= init_size
+        self.embeddings[1].weight.data *= init_size
+
+        # Precompute rotary frequencies
+        inv_freq = 1.0 / (rope_base ** (torch.arange(rank, dtype=torch.float32) / rank))
+        self.register_buffer("rope_inv_freq", inv_freq, persistent=False)
+        #self.T_scale = sizes[3]/365
+        self.T_scale = 1
+
+    @staticmethod
+    def has_time():
+        return False
+
+    def forward_over_time(self, x):
+        raise NotImplementedError("no.")
+
+    def score(self, x):
+        lhs = self.embeddings[0](x[:, 0])
+        rel = self.embeddings[1](x[:, 1])
+        rhs = self.embeddings[0](x[:, 2])
+        time_id = x[:,3] / self.T_scale
+
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        rhs = rhs[:, :self.rank], rhs[:, self.rank:]
+
+        # --- Step 1: complex multiply lhs * rel ---
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        # --- Step 2: apply RoPE on the product ---
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        return torch.sum(
+            lhs_rel_real * rhs[0] +
+            lhs_rel_imag * rhs[1],
+            1, keepdim=True
+        )
+
+    def forward(self, x):
+        lhs = self.embeddings[0](x[:, 0])
+        rel = self.embeddings[1](x[:, 1])
+        rhs = self.embeddings[0](x[:, 2])
+        time_id = x[:,3] / self.T_scale
+
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        rhs = rhs[:, :self.rank], rhs[:, self.rank:]
+
+        # --- Step 1: complex multiply lhs * rel ---
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        # --- Step 2: apply RoPE on the product ---
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        # # --- Step 3: score against all rhs entities ---
+        right = self.embeddings[0].weight
+        right = right[:, :self.rank], right[:, self.rank:]
+
+        right = self._apply_rope(right[0],right[1],time_id)
+
+        scores = (
+                lhs_rel_real @ right[0].transpose(0, 1) +
+                lhs_rel_imag @ right[1].transpose(0, 1)
+        )
+
+        # norms (before rotation is fine, since RoPE preserves norm)
+        norms = (
+            torch.sqrt(lhs[0] ** 2 + lhs[1] ** 2),
+            torch.sqrt(rel[0] ** 2 + rel[1] ** 2),
+            torch.sqrt(rhs[0] ** 2 + rhs[1] ** 2)
+        )
+
+        return scores, norms, None
+
+    def get_rhs(self, chunk_begin: int, chunk_size: int, x: torch.Tensor = None):
+        time_id = x[:,3] / self.T_scale
+        right = self.embeddings[0].weight
+        right = right[:, :self.rank], right[:, self.rank:]
+
+        right = self._apply_rope(right[0],right[1], time_id)
+
+        return right.transpose(0, 1)
+
+    def get_queries(self, queries: torch.Tensor):
+        lhs = self.embeddings[0](queries[:, 0])
+        rel = self.embeddings[1](queries[:, 1])
+        lhs = lhs[:, :self.rank], lhs[:, self.rank:]
+        rel = rel[:, :self.rank], rel[:, self.rank:]
+        time_id = queries[:, 3] / self.T_scale
+
+        # --- Step 1: complex multiply lhs * rel ---
+        lhs_rel_real = lhs[0] * rel[0] - lhs[1] * rel[1]
+        lhs_rel_imag = lhs[0] * rel[1] + lhs[1] * rel[0]
+
+        # --- Step 2: apply RoPE on the product ---
+        lhs_rel_real, lhs_rel_imag = self._apply_rope(lhs_rel_real, lhs_rel_imag, time_id)
+
+        return torch.cat([
+            lhs_rel_real,
+            lhs_rel_imag
+        ], 1)
+
+    def get_ranking(
+            self, queries: torch.Tensor,
+            filters: Dict[Tuple[int, int, int], List[int]],
+            batch_size: int = 1000, chunk_size: int = -1
+    ):
+        """
+        Returns filtered ranking for each queries.
+        :param queries: a torch.LongTensor of quadruples (lhs, rel, rhs, timestamp)
+        :param filters: filters[(lhs, rel, ts)] gives the elements to filter from ranking
+        :param batch_size: maximum number of queries processed at once
+        :param chunk_size: maximum number of candidates processed at once
+        :return:
+        """
+        if chunk_size < 0:
+            chunk_size = self.sizes[2]
+        ranks = torch.ones(len(queries))
+        with torch.no_grad():
+            c_begin = 0
+            while c_begin < self.sizes[2]:
+                b_begin = 0
+                rhs = self.get_rhs(c_begin, chunk_size,queries)
+                while b_begin < len(queries):
+                    these_queries = queries[b_begin:b_begin + batch_size]
+                    q = self.get_queries(these_queries)
+
+                    scores = q @ rhs
+                    targets = self.score(these_queries)
+                    assert not torch.any(torch.isinf(scores)), "inf scores"
+                    assert not torch.any(torch.isnan(scores)), "nan scores"
+                    assert not torch.any(torch.isinf(targets)), "inf targets"
+                    assert not torch.any(torch.isnan(targets)), "nan targets"
+
+                    # set filtered and true scores to -1e6 to be ignored
+                    # take care that scores are chunked
+                    for i, query in enumerate(these_queries):
+                        filter_out = filters[(query[0].item(), query[1].item(), query[3].item())]
+                        filter_out += [queries[b_begin + i, 2].item()]
+                        if chunk_size < self.sizes[2]:
+                            filter_in_chunk = [
+                                int(x - c_begin) for x in filter_out
+                                if c_begin <= x < c_begin + chunk_size
+                            ]
+                            scores[i, torch.LongTensor(filter_in_chunk)] = -1e6
+                        else:
+                            scores[i, torch.LongTensor(filter_out)] = -1e6
+                    ranks[b_begin:b_begin + batch_size] += torch.sum(
+                        (scores >= targets).float(), dim=1
+                    ).cpu()
+
+                    b_begin += batch_size
+
+                c_begin += chunk_size
+        return ranks
+
+    def _apply_rope(self, real: torch.Tensor, imag: torch.Tensor, time_id: torch.Tensor):
+        """
+        RoPE rotation: (real, imag) rotated by angle = time_id * inv_freq
+        real, imag: [B, rank]
+        time_id:    [B] (position = time)
+        """
+        angles = time_id.to(real.dtype).unsqueeze(1) * self.rope_inv_freq.unsqueeze(0)  # [B, rank]
+        cos, sin = torch.cos(angles), torch.sin(angles)
+        real_rot = real * cos - imag * sin
+        imag_rot = real * sin + imag * cos
+        return real_rot, imag_rot
+
 class TComplEx(TKBCModel):
     def __init__(
             self, sizes: Tuple[int, int, int, int], rank: int,
